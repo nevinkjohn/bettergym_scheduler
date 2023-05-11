@@ -22,12 +22,12 @@ from sendgrid.helpers.mail import Mail
 config = configparser.ConfigParser()
 config.read('config.ini')
 
-USERNAME = config['USVISA']['USERNAME']
-PASSWORD = config['USVISA']['PASSWORD']
-SCHEDULE_ID = config['USVISA']['SCHEDULE_ID']
-MY_SCHEDULE_DATE = config['USVISA']['MY_SCHEDULE_DATE']
-COUNTRY_CODE = config['USVISA']['COUNTRY_CODE'] 
-FACILITY_ID = config['USVISA']['FACILITY_ID']
+USERNAME = config['CRED']['USERNAME']
+PASSWORD = config['CRED']['PASSWORD']
+# SCHEDULE_ID = config['CRED']['SCHEDULE_ID']
+MY_SCHEDULE_DATE = config['CRED']['MY_SCHEDULE_DATE']
+# COUNTRY_CODE = config['CRED']['COUNTRY_CODE'] 
+# FACILITY_ID = config['CRED']['FACILITY_ID']
 
 SENDGRID_API_KEY = config['SENDGRID']['SENDGRID_API_KEY']
 PUSH_TOKEN = config['PUSHOVER']['PUSH_TOKEN']
@@ -36,7 +36,7 @@ PUSH_USER = config['PUSHOVER']['PUSH_USER']
 LOCAL_USE = config['CHROMEDRIVER'].getboolean('LOCAL_USE')
 HUB_ADDRESS = config['CHROMEDRIVER']['HUB_ADDRESS']
 
-REGEX_CONTINUE = "//a[contains(text(),'Continuar')]"
+# REGEX_CONTINUE = "//a[contains(text(),'Continuar')]"
 
 
 # def MY_CONDITION(month, day): return int(month) == 11 and int(day) >= 5
@@ -47,9 +47,9 @@ RETRY_TIME = 60*10  # wait time between retries/checks for available dates: 10 m
 EXCEPTION_TIME = 60*30  # wait time when an exception occurs: 30 minutes
 COOLDOWN_TIME = 60*60  # wait time when temporary banned (empty list): 60 minutes
 
-DATE_URL = f"https://ais.usvisa-info.com/{COUNTRY_CODE}/niv/schedule/{SCHEDULE_ID}/appointment/days/{FACILITY_ID}.json?appointments[expedite]=false"
-TIME_URL = f"https://ais.usvisa-info.com/{COUNTRY_CODE}/niv/schedule/{SCHEDULE_ID}/appointment/times/{FACILITY_ID}.json?date=%s&appointments[expedite]=false"
-APPOINTMENT_URL = f"https://ais.usvisa-info.com/{COUNTRY_CODE}/niv/schedule/{SCHEDULE_ID}/appointment"
+# DATE_URL = f"https://ais.usvisa-info.com/{COUNTRY_CODE}/niv/schedule/{SCHEDULE_ID}/appointment/days/{FACILITY_ID}.json?appointments[expedite]=false"
+# TIME_URL = f"https://ais.usvisa-info.com/{COUNTRY_CODE}/niv/schedule/{SCHEDULE_ID}/appointment/times/{FACILITY_ID}.json?date=%s&appointments[expedite]=false"
+APPOINTMENT_URL = f"https://bookings.better.org.uk/location/swiss-cottage-leisure-centre/squash-court-40min/{MY_SCHEDULE_DATE}/by-time"
 EXIT = False
 
 
@@ -93,50 +93,29 @@ driver = get_driver()
 
 def login():
     # Bypass reCAPTCHA
-    driver.get(f"https://ais.usvisa-info.com/{COUNTRY_CODE}/niv")
+    driver.get(f"https://myaccount.better.org.uk/login")
     time.sleep(STEP_TIME)
-    a = driver.find_element(By.XPATH, '//a[@class="down-arrow bounce"]')
-    a.click()
-    time.sleep(STEP_TIME)
-
-    print("Login start...")
-    href = driver.find_element(By.XPATH, '//*[@id="header"]/nav/div[1]/div[1]/div[2]/div[1]/ul/li[3]/a')
-   
-    href.click()
-    time.sleep(STEP_TIME)
-    Wait(driver, 60).until(EC.presence_of_element_located((By.NAME, "commit")))
-
-    print("\tclick bounce")
-    a = driver.find_element(By.XPATH, '//a[@class="down-arrow bounce"]')
-    a.click()
-    time.sleep(STEP_TIME)
-
     do_login_action()
 
 
 def do_login_action():
     print("\tinput email")
-    user = driver.find_element(By.ID, 'user_email')
+    user = driver.find_element(By.name, 'username')
     user.send_keys(USERNAME)
     time.sleep(random.randint(1, 3))
 
     print("\tinput pwd")
-    pw = driver.find_element(By.ID, 'user_password')
+    pw = driver.find_element(By.name, 'password')
     pw.send_keys(PASSWORD)
     time.sleep(random.randint(1, 3))
 
-    print("\tclick privacy")
-    box = driver.find_element(By.CLASS_NAME, 'icheckbox')
-    box .click()
-    time.sleep(random.randint(1, 3))
-
-    print("\tcommit")
-    btn = driver.find_element(By.NAME, 'commit')
+    print("\tsubmit")
+    btn = driver.find_element(By.XPATH, '//*[@data-testid="log-in"]')
     btn.click()
     time.sleep(random.randint(1, 3))
 
-    Wait(driver, 60).until(
-        EC.presence_of_element_located((By.XPATH, REGEX_CONTINUE)))
+    # Wait(driver, 60).until(
+    #     EC.presence_of_element_located((By.XPATH, REGEX_CONTINUE)))
     print("\tlogin successful!")
 
 
