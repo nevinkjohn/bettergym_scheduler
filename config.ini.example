@@ -1,9 +1,9 @@
-[USVISA]
+[CRED]
 ; Account and current appointment info from https://ais.usvisa-info.com
-USERNAME = example@example.com
-PASSWORD = xxxxxxxxxx
+USERNAME = nevinkjohn+1@gmail.com
+PASSWORD = IAmSpiderman1*
 SCHEDULE_ID = 99999999
-MY_SCHEDULE_DATE = 2024-01-01
+MY_SCHEDULE_DATE = 2023-05-11
 ; Spanish - Colombia
 COUNTRY_CODE = es-co
 ; Bogotá
