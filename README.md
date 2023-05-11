@@ -1,8 +1,8 @@
-# visa_rescheduler
-US VISA (ais.usvisa-info.com) appointment re-scheduler - Colombian adaptation
+# BetterGym class notfier
+Notfies when a slot of interest opens up
 
 ## Prerequisites
-- Having a US VISA appointment scheduled already
+- An account with bettergym
 - Google Chrome installed (to be controlled by the script)
 - Python v3 installed (for running the script)
 - API token from Pushover and/or a Sendgrid (for notifications)
@@ -13,8 +13,8 @@ US VISA (ais.usvisa-info.com) appointment re-scheduler - Colombian adaptation
 - Install the required python packages: `pip3 install -r requirements.txt`
 
 ## Executing the script
-- Simply run `python3 visa.py`
+- Simply run `python3 notifier.py`
 - That's it!
 
 ## Acknowledgement
-Thanks to @yaojialyu for creating the initial script and to @cejaramillof for adapting it to Colombia!
+Thanks to @uxDaniel
