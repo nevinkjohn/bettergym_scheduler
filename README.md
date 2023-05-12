@@ -1,5 +1,5 @@
-# BetterGym class notfier
-Notfies when a slot of interest opens up
+# [Unfinished] BetterGym class booking bot
+Books a specific class when a slot of interest opens up
 
 ## Prerequisites
 - An account with bettergym

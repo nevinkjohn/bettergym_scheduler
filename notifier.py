@@ -1,5 +1,5 @@
 # -*- coding: utf8 -*-
-
+import ast
 import time
 import json
 import random
@@ -12,8 +12,10 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait as Wait
+from selenium.webdriver.support.ui import Select
 from selenium.webdriver.common.by import By
 from webdriver_manager.chrome import ChromeDriverManager
+from selenium.common.exceptions import StaleElementReferenceException
 
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
@@ -26,7 +28,9 @@ USERNAME = config['CRED']['USERNAME']
 PASSWORD = config['CRED']['PASSWORD']
 # SCHEDULE_ID = config['CRED']['SCHEDULE_ID']
 MY_SCHEDULE_DATE = config['CRED']['MY_SCHEDULE_DATE']
-# COUNTRY_CODE = config['CRED']['COUNTRY_CODE'] 
+SLOT_PREFERENCE_ORDER = ast.literal_eval(config['CRED']['SLOT_PREFERENCE_ORDER'])
+print('SLOT_PREFERENCE_ORDER:', SLOT_PREFERENCE_ORDER)
+# COUNTRY_CODE = config['CRED']['COUNTRY_CODE']
 # FACILITY_ID = config['CRED']['FACILITY_ID']
 
 SENDGRID_API_KEY = config['SENDGRID']['SENDGRID_API_KEY']
@@ -36,7 +40,9 @@ PUSH_USER = config['PUSHOVER']['PUSH_USER']
 LOCAL_USE = config['CHROMEDRIVER'].getboolean('LOCAL_USE')
 HUB_ADDRESS = config['CHROMEDRIVER']['HUB_ADDRESS']
 
-# REGEX_CONTINUE = "//a[contains(text(),'Continuar')]"
+REGEX_PAYMENTS = "//a[contains(text(),'Payments')]"
+REGEX_SHOPPING = "//a[contains(text(),'Shopping')]"
+REGEX_CHECKOUT = "//a[contains(text(),'Checkout')]"
 
 
 # def MY_CONDITION(month, day): return int(month) == 11 and int(day) >= 5
@@ -47,38 +53,8 @@ RETRY_TIME = 60*10  # wait time between retries/checks for available dates: 10 m
 EXCEPTION_TIME = 60*30  # wait time when an exception occurs: 30 minutes
 COOLDOWN_TIME = 60*60  # wait time when temporary banned (empty list): 60 minutes
 
-# DATE_URL = f"https://ais.usvisa-info.com/{COUNTRY_CODE}/niv/schedule/{SCHEDULE_ID}/appointment/days/{FACILITY_ID}.json?appointments[expedite]=false"
-# TIME_URL = f"https://ais.usvisa-info.com/{COUNTRY_CODE}/niv/schedule/{SCHEDULE_ID}/appointment/times/{FACILITY_ID}.json?date=%s&appointments[expedite]=false"
-APPOINTMENT_URL = f"https://bookings.better.org.uk/location/swiss-cottage-leisure-centre/squash-court-40min/{MY_SCHEDULE_DATE}/by-time"
+ACTIVITY_URL = f"https://bookings.better.org.uk/location/swiss-cottage-leisure-centre/squash-court-40min/{MY_SCHEDULE_DATE}/by-time"
 EXIT = False
-
-
-def send_notification(msg):
-    print(f"Sending notification: {msg}")
-
-    if SENDGRID_API_KEY:
-        message = Mail(
-            from_email=USERNAME,
-            to_emails=USERNAME,
-            subject=msg,
-            html_content=msg)
-        try:
-            sg = SendGridAPIClient(SENDGRID_API_KEY)
-            response = sg.send(message)
-            print(response.status_code)
-            print(response.body)
-            print(response.headers)
-        except Exception as e:
-            print(e.message)
-
-    if PUSH_TOKEN:
-        url = "https://api.pushover.net/1/messages.json"
-        data = {
-            "token": PUSH_TOKEN,
-            "user": PUSH_USER,
-            "message": msg
-        }
-        requests.post(url, data)
 
 
 def get_driver():
@@ -100,77 +76,138 @@ def login():
 
 def do_login_action():
     print("\tinput email")
-    user = driver.find_element(By.name, 'username')
+
+    user = Wait(driver, 60).until(
+        EC.presence_of_element_located((By.XPATH, '//*[@id="root"]/div[2]/div/div/form/div[1]/div/input'))
+    )
+    user.click()
     user.send_keys(USERNAME)
-    time.sleep(random.randint(1, 3))
+    # time.sleep(random.randint(1, 3))
 
     print("\tinput pwd")
-    pw = driver.find_element(By.name, 'password')
+    pw = driver.find_element(By.XPATH, '//*[@id="root"]/div[2]/div/div/form/div[2]/div/div/input')
+    pw.click()
     pw.send_keys(PASSWORD)
-    time.sleep(random.randint(1, 3))
+    # time.sleep(random.randint(1, 3))
 
     print("\tsubmit")
-    btn = driver.find_element(By.XPATH, '//*[@data-testid="log-in"]')
+    btn = driver.find_element(By.XPATH, '//*[@id="root"]/div[2]/div/div/form/div[3]/button')
     btn.click()
     time.sleep(random.randint(1, 3))
 
-    # Wait(driver, 60).until(
-    #     EC.presence_of_element_located((By.XPATH, REGEX_CONTINUE)))
+    Wait(driver, 60).until(
+        EC.presence_of_element_located((By.XPATH, REGEX_PAYMENTS)))
     print("\tlogin successful!")
 
 
-def get_date():
-    driver.get(DATE_URL)
+def get_available_slots_for_the_day():
+    driver.get(ACTIVITY_URL)
     if not is_logged_in():
         login()
-        return get_date()
+        return get_available_slots_for_the_day()
     else:
-        content = driver.find_element(By.TAG_NAME, 'pre').text
-        date = json.loads(content)
-        return date
+        Wait(driver, 60).until(
+            EC.presence_of_element_located((By.XPATH, '//*[@id="root"]/div[3]/div/div[1]/div/div[5]')))
+        time.sleep(random.randint(3, 5))
+        slots_table = driver.find_element(By.XPATH, '//*[@id="root"]/div[3]/div/div[1]/div/div[5]')
+        print(slots_table)
+        print('slots table size:', len(slots_table.find_elements(By.XPATH, './div')))
+        slots = slots_table.find_elements(By.XPATH, './div')
+        # print(slots)
+        # print('slots', slots.text)
+        available_slots = {}
+        for i, elem in enumerate(slots):
+            try:
+                class_time = elem.find_element(By.CLASS_NAME, 'jsQbPF')
+                # print('CLASS TIME:', class_time.text)
+                available_slots[class_time.text] = elem
+            except:
+                print("No Class time found")
+
+        print('available_slots:', len(available_slots), [*available_slots])
+        return available_slots
 
 
-def get_time(date):
-    time_url = TIME_URL % date
-    driver.get(time_url)
-    content = driver.find_element(By.TAG_NAME, 'pre').text
-    data = json.loads(content)
-    time = data.get("available_times")[-1]
-    print(f"Got time successfully! {date} {time}")
-    return time
+def get_matched_slots():
+    available_slots = get_available_slots_for_the_day()
+    matched_slots = {i: available_slots[i] for i in SLOT_PREFERENCE_ORDER if i in available_slots.keys()}
+    print('matched_slots:', [*matched_slots])
+    print(SLOT_PREFERENCE_ORDER[0], [*available_slots][0], len(SLOT_PREFERENCE_ORDER[0]), len([*available_slots][0]))
+    print(SLOT_PREFERENCE_ORDER[0] == [*available_slots][0])
+    return matched_slots
 
 
-def reschedule(date):
-    global EXIT
-    print(f"Starting Reschedule ({date})")
+def book_slot(slot: str, web_element=None):
+    '''
+    # Below is the Code to navigate through the slot selection. This can currently circumvented by direct link
+    print("Booking the slot:", slot)
+    print("web_element:", web_element.text)
+    book_button = web_element.find_element(By.CLASS_NAME, 'fQvmgf')
+    print("book_button:", book_button.text)
+    book_button.click()
+    Wait(driver, 30).until(EC.presence_of_element_located((By.XPATH, '/html/body/div[3]/div[3]/div[2]/button[1]')))
 
-    time = get_time(date)
-    driver.get(APPOINTMENT_URL)
+    '''
+    slot_url = ACTIVITY_URL + '/slot/' + slot.replace(" ", "")
+    print('slot_url:', slot_url)
 
-    data = {
-        "utf8": driver.find_element(by=By.NAME, value='utf8').get_attribute('value'),
-        "authenticity_token": driver.find_element(by=By.NAME, value='authenticity_token').get_attribute('value'),
-        "confirmed_limit_message": driver.find_element(by=By.NAME, value='confirmed_limit_message').get_attribute('value'),
-        "use_consulate_appointment_capacity": driver.find_element(by=By.NAME, value='use_consulate_appointment_capacity').get_attribute('value'),
-        "appointments[consulate_appointment][facility_id]": FACILITY_ID,
-        "appointments[consulate_appointment][date]": date,
-        "appointments[consulate_appointment][time]": time,
-    }
+    driver.get(slot_url)
+    Wait(driver, 60).until(
+        EC.presence_of_element_located((By.XPATH, "//button[contains(concat(' ', normalize-space(@class), ' '), 'lfRJfj')]")))
+    time.sleep(random.randint(1, 3))
 
-    headers = {
-        "User-Agent": driver.execute_script("return navigator.userAgent;"),
-        "Referer": APPOINTMENT_URL,
-        "Cookie": "_yatri_session=" + driver.get_cookie("_yatri_session")["value"]
-    }
-
-    r = requests.post(APPOINTMENT_URL, headers=headers, data=data)
-    if(r.text.find('Successfully Scheduled') != -1):
-        msg = f"Rescheduled Successfully! {date} {time}"
-        send_notification(msg)
-        EXIT = True
+    btn = driver.find_element(By.XPATH, "//button[contains(concat(' ', normalize-space(@class), ' '), 'lfRJfj')]")
+    print("Book now button identified")
+    if btn.is_enabled():
+        print('button is enabled')
     else:
-        msg = f"Reschedule Failed. {date} {time}"
-        send_notification(msg)
+        try:
+            choose_available_court()
+        except StaleElementReferenceException:
+            return False
+    btn.click()
+    # Wait(driver, 60).until(EC.presence_of_element_located((By.XPATH, REGEX_CHECKOUT)))
+    time.sleep(10)
+    time.sleep(random.randint(1, 3))
+
+    credit_balance_button = driver.find_element(By.XPATH, '//*[@id="root"]/div[3]/div/div[1]/div/div[3]/div/button')
+    credit_balance_button.click()
+    time.sleep(15)
+
+    pay_now_button = driver.find_element(By.XPATH, '//*[@id="root"]/div[3]/div/div[1]/div/div[4]/div/div/div[2]/button')
+    pay_now_button.click()
+    time.sleep(5)
+    print("Booking done (better cross check)")
+
+    time.sleep(30)
+    return True
+
+
+def choose_available_court():
+    court_selector = driver.find_element(By.CLASS_NAME, 'igKTXz')
+    court_selector.click()
+    time.sleep(5)
+    options_dropdown = driver.find_element(By.XPATH, "//div[contains(concat(' ', normalize-space(@class), ' '), 'menu')]")
+    print('options_dropdown:', options_dropdown.text)
+    options = options_dropdown.find_elements(By.XPATH, './div/div')
+    # options = select.options
+    print(type(options))
+    print(len(options))
+    # court_selector.click()
+    for index, elem in enumerate(options[::-1]):
+        # TODO: refine Logic to change courts until it matches availability
+        # court_selector.click()
+        print(index, elem.text)
+        elem.click()
+        time.sleep(5)
+        btn = driver.find_element(By.XPATH, "//button[contains(concat(' ', normalize-space(@class), ' '), 'lfRJfj')]")
+        court_selector.click()
+        if btn.is_enabled():
+            print("Book Now button is enabled")
+            return
+        else:
+            print("Book Now button is not enabled")
+            court_selector.click()
 
 
 def is_logged_in():
@@ -180,44 +217,17 @@ def is_logged_in():
     return True
 
 
-def print_dates(dates):
-    print("Available dates:")
-    for d in dates:
-        print("%s \t business_day: %s" % (d.get('date'), d.get('business_day')))
-    print()
-
-
-last_seen = None
-
-
-def get_available_date(dates):
-    global last_seen
-
-    def is_earlier(date):
-        my_date = datetime.strptime(MY_SCHEDULE_DATE, "%Y-%m-%d")
-        new_date = datetime.strptime(date, "%Y-%m-%d")
-        result = my_date > new_date
-        print(f'Is {my_date} > {new_date}:\t{result}')
-        return result
-
-    print("Checking for an earlier date:")
-    for d in dates:
-        date = d.get('date')
-        if is_earlier(date) and date != last_seen:
-            _, month, day = date.split('-')
-            if(MY_CONDITION(month, day)):
-                last_seen = date
-                return date
-
-
-def push_notification(dates):
-    msg = "date: "
-    for d in dates:
-        msg = msg + d.get('date') + '; '
-    send_notification(msg)
-
-
 if __name__ == "__main__":
+    try:
+        login()
+        # matched_slots = get_matched_slots()
+        matched_slots = SLOT_PREFERENCE_ORDER
+        if len(matched_slots) != 0:
+            slot = next(iter(matched_slots))
+            book_slot(slot)
+    finally:
+        driver.quit()
+
     login()
     retry_count = 0
     while 1:
@@ -229,34 +239,20 @@ if __name__ == "__main__":
             print(f"Retry count: {retry_count}")
             print()
 
-            dates = get_date()[:5]
-            if not dates:
-              msg = "List is empty"
-              send_notification(msg)
-              EXIT = True
-            print_dates(dates)
-            date = get_available_date(dates)
-            print()
-            print(f"New date: {date}")
-            if date:
-                reschedule(date)
-                push_notification(dates)
+            matched_slots = SLOT_PREFERENCE_ORDER
+            if len(matched_slots) != 0:
+                slot = next(iter(matched_slots))
+                EXIT = book_slot(slot)
 
-            if(EXIT):
-                print("------------------exit")
+
+            if EXIT:
                 break
-
-            if not dates:
-              msg = "List is empty"
-              send_notification(msg)
-              #EXIT = True
-              time.sleep(COOLDOWN_TIME)
             else:
-              time.sleep(RETRY_TIME)
+                print("No slot found. Snoozing for:", RETRY_TIME)
+                time.sleep(RETRY_TIME)
 
         except:
             retry_count += 1
+            print("Exception encountered. Snoozing for:", EXCEPTION_TIME, ";retry_count:", retry_count)
             time.sleep(EXCEPTION_TIME)
 
-    if(not EXIT):
-        send_notification("HELP! Crashed.")
